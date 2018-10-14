@@ -1,6 +1,6 @@
 {
   "name": "@yunke/load-git",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "repository": "git@git.mysoft.com.cn:yued/load-git.git",
   "license": "MIT",
   "main": "build/index.js",
