@@ -3,7 +3,7 @@ import * as request from "request-promise-native";
 const gitHttpReg = /https?:\/\/([^/]+)\/(.+)\.git/;
 const gitSshReg = /git@([^:]+):(.+)\.git/;
 
-function getUrlConfig(gitUrl: string): { host: string, repId: string } | null {
+function getUrlConfig(gitUrl: string): { host: string, repId: string } {
   let host = '';
   let repId = '';
 
@@ -25,35 +25,26 @@ function getUrlConfig(gitUrl: string): { host: string, repId: string } | null {
   if (exec) {
     return { host, repId };
   }
-  return null;
+  throw new Error(`Git url not supported yet: ${gitUrl}`);
 }
 
-export function getArchiveUrls(gitUrl: string, branches: string[] = ['master']): string[] | null {
+export function getArchiveUrl(gitUrl: string, branch: string = 'master'): string {
   const config = getUrlConfig(gitUrl);
-  if (config) {
-    const { host, repId } = config;
-    return branches.map((branch) => {
-      return `https://${host}/${repId}/repository/${branch}/archive.zip`;
-    });
-  }
-  return null;
+  const { host, repId } = config;
+  return `https://${host}/${repId}/repository/${branch}/archive.zip`;
 }
 
-export async function getBranchLastCommitId(gitUrl: string, branch: string, accessToken?: string): Promise<string | null> {
+export async function getBranchLastCommitId(gitUrl: string, branch: string, accessToken?: string): Promise<string> {
   const config = getUrlConfig(gitUrl);
 
-  if (config) {
-    const { host, repId } = config;
+  const { host, repId } = config;
 
-    const uri = `https://${host}/api/v4/projects/${encodeURIComponent(repId)}/repository/branches/${branch}`;
+  const uri = `https://${host}/api/v4/projects/${encodeURIComponent(repId)}/repository/branches/${branch}`;
 
-    const res = await request({
-      uri,
-      qs: { private_token: accessToken },
-      json: true,
-    });
-    return res.commit.id;
-  }
-
-  return null;
+  const res = await request({
+    uri,
+    qs: { private_token: accessToken },
+    json: true,
+  });
+  return res.commit.id;
 }

@@ -1,20 +1,16 @@
 import * as fs from 'fs';
-import * as glob from 'glob';
 import * as mkdirp from 'mkdirp';
 import * as path from 'path';
-import * as protobufjs from 'protobufjs';
-import { Root } from 'protobufjs';
 import * as request from 'request';
 import * as unzip from 'unzip';
-import * as url from 'url';
-import { getArchiveUrls, getBranchLastCommitId } from "./git";
-import { loadFromJson } from "./loader";
-
-export { loadFromJson, createPackageDefinition } from './loader';
+import { getArchiveUrl, getBranchLastCommitId } from "./git";
+import { v4 } from 'uuid';
 
 const rmrf = require('rmrf');
 
-const CACHE_DIR = `${process.cwd()}/load-proto-cache`;
+const CACHE_DIR = `${process.cwd()}/.load-git-cache`;
+
+const loadPromiseMap: { [gitAndBranch: string]: Promise<LoadRes> } = {};
 
 interface IDownloadRes {
   path: string;
@@ -22,12 +18,11 @@ interface IDownloadRes {
   url: string;
 }
 
-async function downloadItem(
+async function download(
     urlStr: string,
     dir: string = `${CACHE_DIR}/${global.Date.now()}_${Math.random()}`,
-    accessToken: string,
+    accessToken?: string,
 ): Promise<IDownloadRes> {
-  const urlObj = url.parse(urlStr, true);
   const zipName = urlStr
       .replace(/^https?:\/\//, '')
       .replace(/\/repository\/.+$/, '')
@@ -46,7 +41,7 @@ async function downloadItem(
 
   return new Promise<any>((resolve, reject) => {
     request({
-      url: urlStr + (!!urlObj.query.private_token ? '' : `?private_token=${accessToken}`),
+      url: urlStr + (!accessToken ? '' : `?private_token=${accessToken}`),
       timeout: 30000,
     })
         .on('error', (err) => {
@@ -67,160 +62,101 @@ async function downloadItem(
   });
 }
 
-async function download(
-    urls: string[],
-    accessToken: string,
-    dir: string = `${CACHE_DIR}/${global.Date.now()}_${Math.random()}`,
-): Promise<IDownloadRes[]> {
-  return Promise.all(urls.map((item) => downloadItem(item, dir, accessToken)));
+function getDirNameForArchiveUrl(archiveUrl: string): string {
+  return archiveUrl
+      .replace(/^https?:\/\//, '')
+      .replace(/\/repository\/.+$/, '');
 }
 
-function unzipProcess(downloadResArr: IDownloadRes[]): Promise<string[]> {
-  return Promise.all(downloadResArr.map((downloadRes) => {
-    return new Promise<string>((resolve, reject) => {
-      const targetDir = path.dirname(downloadRes.path) + '/' + downloadRes.url
-          .replace(/^https?:\/\//, '')
-          .replace(/\/repository\/.+$/, '');
-      fs.createReadStream(downloadRes.path)
-          .pipe(unzip.Parse())
-          .on('entry', (entry) => {
-            if (entry.type === 'File') {
-              const filepath = `${targetDir}/${entry.path.split('/').slice(1).join('/')}`;
-              const dir = path.dirname(filepath);
-              mkdirp(dir, (err) => {
-                if (err) {
-                  reject(err);
-                } else {
-                  entry.pipe(fs.createWriteStream(filepath));
-                }
-              });
-            }
-          })
-          .on('close', () => {
-            resolve(targetDir);
-          });
-    });
-  }));
-}
-
-async function pbjs(protoDirs: string[], includeDir: string): Promise<Root> {
-  const protoFiles: string[] = [];
-  await Promise.all(protoDirs.map((dir) => {
-    return new Promise((resolve, reject) => {
-      glob(`${dir}/**/*.proto`, (err, matches) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        protoFiles.push(...matches);
-        resolve(matches);
-      });
-    });
-  }));
-
-  const root = new protobufjs.Root();
-  root.resolvePath = (origin, target) => {
-    if (target.indexOf('google/protobuf') === 0) {
-      return `${path.dirname(require.resolve('protobufjs'))}/${target}`;
-    } else if (target.indexOf('proto/') === 0) {
-      // tslint:disable-next-line variable-name
-      return target.replace(/^proto\/([^\/]+)(.+)/, (_target, $1, $2) => {
-        return `${includeDir}/git.myscrm.cn/2c/${$1.replace(/_/g, '-')}${$2}`;
-      });
-    } else if (origin) {
-      return `${includeDir}/${target}`;
-    }
-    return target;
-  };
-
-  return new Promise<any>((resolve, reject) => {
-    root.load(
-        protoFiles,
-        {
-          keepCase: true,
-          alternateCommentMode: true,
-        },
-        (err, res) => {
-          if (err) {
-            reject(err);
-            return;
+function unzipProcess(downloadRes: IDownloadRes): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const targetDir = path.dirname(downloadRes.path) + '/' + getDirNameForArchiveUrl(downloadRes.url);
+    fs.createReadStream(downloadRes.path)
+        .pipe(unzip.Parse())
+        .on('entry', (entry) => {
+          if (entry.type === 'File') {
+            const filepath = `${targetDir}/${entry.path.split('/').slice(1).join('/')}`;
+            const dir = path.dirname(filepath);
+            mkdirp(dir, (err) => {
+              if (err) {
+                reject(err);
+              } else {
+                entry.pipe(fs.createWriteStream(filepath));
+              }
+            });
           }
-          resolve(res);
-        },
-    );
+        })
+        .on('close', () => {
+          resolve(targetDir);
+        });
   });
 }
 
-const gitHttpReg = /https?:\/\/([^/]+)\/(.+)\.git/;
-const gitSshReg = /git@([^:]+):(.+)\.git/;
-
-function getUrlConfig(gitUrl: string): { host: string, repId: string } | null {
-  let host = '';
-  let repId = '';
-
-  let exec = gitHttpReg.exec(gitUrl);
-  if (exec) {
-    host = exec[1];
-    repId = exec[2];
-  }
-
-  if (!exec) {
-    exec = gitSshReg.exec(gitUrl);
-
-    if (exec) {
-      host = exec[1];
-      repId = exec[2];
-    }
-  }
-
-  if (exec) {
-    return { host, repId };
-  }
-  return null;
+export interface GitConfig {
+  url: string;
+  branch: string;
+  accessToken?: string;
 }
 
-export async function loadProto(gitUrls: string[], branch: string, accessToken: string): Promise<Root> {
-  const archiveUrls: string[] = gitUrls
-      .map<string>((gitUrl) => {
-        const archiveUrls = getArchiveUrls(gitUrl, [branch]);
-        if (archiveUrls) {
-          return archiveUrls[0];
-        }
-        return '';
-      })
-      .filter((item) => !!item);
-  let tempDir;
-  let root: Root;
-  try {
-    const branchLastCommitId = await getBranchLastCommitId(gitUrls[0], branch, accessToken);
+export interface LoadRes {
+  parentDir: string;
+  path: string;
+}
 
-    const filePath = (branchLastCommitId ? `${CACHE_DIR}/${branchLastCommitId}` : undefined);
-    const jsonFilePath = (branchLastCommitId ? `${filePath}/json.json` : undefined);
-    if (!jsonFilePath || !fs.existsSync(jsonFilePath)) {
-      const downloadResArr = await download(
-          [
-            // 公共依赖仓库
-            'https://git.myscrm.cn/golang/common/repository/master/archive.zip',
-            ...archiveUrls,
-          ],
-          accessToken,
-          filePath,
-      );
-      tempDir = downloadResArr[0].dir;
-      let protoDirs = await unzipProcess(downloadResArr);
-      root = await pbjs(protoDirs.slice(1), tempDir);
-      if (jsonFilePath) {
-        fs.writeFileSync(jsonFilePath, JSON.stringify(root.toJSON({ keepComments: true })));
-      }
-    } else {
-      root = Root.fromJSON(require(jsonFilePath), new Root());
-    }
-  } catch (e) {
-    if (tempDir) {
-      rmrf(tempDir);
-    }
-    throw e;
+export async function load(opt: GitConfig): Promise<LoadRes> {
+  const { url, branch, accessToken } = opt;
+
+  const promiseKey = `${url}-${branch}`;
+
+  const promise = loadPromiseMap[promiseKey];
+  if (promise) {
+    return promise;
   }
 
-  return root;
+  let parentDir: string = '';
+  try {
+    const archiveUrl = getArchiveUrl(url, branch);
+
+    const branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
+
+    parentDir = `${CACHE_DIR}/${branchLastCommitId}`;
+
+    if (!fs.existsSync(parentDir)) {
+      let tempParentDir = `${CACHE_DIR}/temp-${v4()}`;
+
+      const downloadRes = await download(
+          archiveUrl,
+          tempParentDir,
+          accessToken,
+      );
+
+      await unzipProcess(downloadRes);
+
+      if (!fs.existsSync(parentDir)) {
+        await new Promise((resolve, reject) => {
+          fs.rename(tempParentDir, parentDir, (err) => {
+            if (err) {
+              reject(err);
+            }
+            resolve();
+          });
+        });
+      } else {
+        rmrf(tempParentDir);
+      }
+
+      delete loadPromiseMap[promiseKey];
+      return { parentDir, path: parentDir + '/' + getDirNameForArchiveUrl(archiveUrl) };
+    } else {
+
+      delete loadPromiseMap[promiseKey];
+      return { parentDir, path: parentDir + '/' + getDirNameForArchiveUrl(archiveUrl) };
+    }
+  } catch (e) {
+    if (parentDir) {
+      rmrf(parentDir);
+    }
+    delete loadPromiseMap[promiseKey];
+    throw e;
+  }
 }
