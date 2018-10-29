@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'fs-extra';
 import * as mkdirp from 'mkdirp';
 import * as path from 'path';
 import * as request from 'request';
@@ -134,7 +134,7 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
       await unzipProcess(downloadRes);
 
       if (!fs.existsSync(parentDir)) {
-        await promisify(fs.copyFileSync)(tempParentDir, parentDir, undefined);
+        await fs.rename(tempParentDir, parentDir);
       }
       rmrf(tempParentDir);
 
