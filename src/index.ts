@@ -3,8 +3,9 @@ import * as mkdirp from 'mkdirp';
 import * as path from 'path';
 import * as request from 'request';
 import * as unzip from 'unzip';
-import { getArchiveUrl, getBranchLastCommitId } from "./git";
+import { promisify } from 'util';
 import { v4 } from 'uuid';
+import { getArchiveUrl, getBranchLastCommitId } from "./git";
 
 const rmrf = require('rmrf');
 
@@ -133,17 +134,9 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
       await unzipProcess(downloadRes);
 
       if (!fs.existsSync(parentDir)) {
-        await new Promise((resolve, reject) => {
-          fs.rename(tempParentDir, parentDir, (err) => {
-            if (err) {
-              reject(err);
-            }
-            resolve();
-          });
-        });
-      } else {
-        rmrf(tempParentDir);
+        await promisify(fs.copyFileSync)(tempParentDir, parentDir, undefined);
       }
+      rmrf(tempParentDir);
 
       delete loadPromiseMap[promiseKey];
       return { parentDir, path: parentDir + '/' + getDirNameForArchiveUrl(archiveUrl) };
