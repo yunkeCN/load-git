@@ -1,7 +1,7 @@
 {
-  "name": "@yunke/load-git",
+  "name": "load-git",
   "version": "1.2.0",
-  "repository": "git@git.mysoft.com.cn:yued/load-git.git",
+  "repository": "https://github.com/yunkeCN/load-git.git",
   "license": "MIT",
   "main": "build/index.js",
   "typings": "build/index.d.ts",
