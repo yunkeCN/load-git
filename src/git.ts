@@ -48,3 +48,18 @@ export async function getBranchLastCommitId(gitUrl: string, branch: string, acce
   });
   return res.commit.id;
 }
+
+export async function isBranchExist(gitUrl: string, branch: string, accessToken?: string): Promise<boolean> {
+  const config = getUrlConfig(gitUrl);
+
+  const { host, repId } = config;
+
+  const uri = `https://${host}/api/v4/projects/${encodeURIComponent(repId)}/repository/branches`;
+
+  const res: any[] = await request({
+    uri,
+    qs: { private_token: accessToken },
+    json: true,
+  });
+  return !!res.find((item) => item.name === branch);
+}

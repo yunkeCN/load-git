@@ -3,9 +3,8 @@ import * as mkdirp from 'mkdirp';
 import * as path from 'path';
 import * as request from 'request';
 import * as unzip from 'unzip';
-import { promisify } from 'util';
 import { v4 } from 'uuid';
-import { getArchiveUrl, getBranchLastCommitId } from "./git";
+import { getArchiveUrl, getBranchLastCommitId, isBranchExist } from "./git";
 
 const rmrf = require('rmrf');
 
@@ -20,14 +19,14 @@ interface IDownloadRes {
 }
 
 async function download(
-    urlStr: string,
-    dir: string = `${CACHE_DIR}/${global.Date.now()}_${Math.random()}`,
-    accessToken?: string,
+  urlStr: string,
+  dir: string = `${CACHE_DIR}/${global.Date.now()}_${Math.random()}`,
+  accessToken?: string,
 ): Promise<IDownloadRes> {
   const zipName = urlStr
-      .replace(/^https?:\/\//, '')
-      .replace(/\/repository\/.+$/, '')
-      .replace(/\//g, '_');
+    .replace(/^https?:\/\//, '')
+    .replace(/\/repository\/.+$/, '')
+    .replace(/\//g, '_');
   const filePath = `${dir}/${zipName}.zip`;
 
   await new Promise((resolve, reject) => {
@@ -45,51 +44,51 @@ async function download(
       url: urlStr + (!accessToken ? '' : `?private_token=${accessToken}`),
       timeout: 30000,
     })
-        .on('error', (err) => {
-          rmrf(dir);
-          reject(err);
-        })
-        .on('response', (res) => {
-          if (res.statusCode === 404) {
-            reject(new Error('系统错误，请联系管理员'));
-          } else if (res.statusCode !== 200) {
-            reject(new Error('服务器配置错误'));
-          }
-        })
-        .pipe(fs.createWriteStream(filePath))
-        .on('close', () => {
-          resolve({ path: filePath, dir, url: urlStr });
-        });
+      .on('error', (err) => {
+        rmrf(dir);
+        reject(err);
+      })
+      .on('response', (res) => {
+        if (res.statusCode === 404) {
+          reject(new Error('系统错误，请联系管理员'));
+        } else if (res.statusCode !== 200) {
+          reject(new Error('服务器配置错误'));
+        }
+      })
+      .pipe(fs.createWriteStream(filePath))
+      .on('close', () => {
+        resolve({ path: filePath, dir, url: urlStr });
+      });
   });
 }
 
 function getDirNameForArchiveUrl(archiveUrl: string): string {
   return archiveUrl
-      .replace(/^https?:\/\//, '')
-      .replace(/\/repository\/.+$/, '');
+    .replace(/^https?:\/\//, '')
+    .replace(/\/repository\/.+$/, '');
 }
 
 function unzipProcess(downloadRes: IDownloadRes): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const targetDir = path.dirname(downloadRes.path) + '/' + getDirNameForArchiveUrl(downloadRes.url);
     fs.createReadStream(downloadRes.path)
-        .pipe(unzip.Parse())
-        .on('entry', (entry) => {
-          if (entry.type === 'File') {
-            const filepath = `${targetDir}/${entry.path.split('/').slice(1).join('/')}`;
-            const dir = path.dirname(filepath);
-            mkdirp(dir, (err) => {
-              if (err) {
-                reject(err);
-              } else {
-                entry.pipe(fs.createWriteStream(filepath));
-              }
-            });
-          }
-        })
-        .on('close', () => {
-          resolve(targetDir);
-        });
+      .pipe(unzip.Parse())
+      .on('entry', (entry) => {
+        if (entry.type === 'File') {
+          const filepath = `${targetDir}/${entry.path.split('/').slice(1).join('/')}`;
+          const dir = path.dirname(filepath);
+          mkdirp(dir, (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              entry.pipe(fs.createWriteStream(filepath));
+            }
+          });
+        }
+      })
+      .on('close', () => {
+        resolve(targetDir);
+      });
   });
 }
 
@@ -105,7 +104,8 @@ export interface LoadRes {
 }
 
 export async function load(opt: GitConfig): Promise<LoadRes> {
-  const { url, branch, accessToken } = opt;
+  const { url, accessToken } = opt;
+  let { branch } = opt;
 
   const promiseKey = `${url}-${branch}`;
 
@@ -116,9 +116,23 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
 
   let parentDir: string = '';
   try {
-    const archiveUrl = getArchiveUrl(url, branch);
+    let branchLastCommitId;
+    try {
+      branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
+    } catch (e) {
+      if (e.statusCode === 404 && branch !== 'master') {
+        const branchNotExist = await isBranchExist(url, branch, accessToken);
+        if (!branchNotExist) {
+          // 分支不存在，则从主干分支获取
+          branch = 'master';
+          branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
+        } else {
+          throw e;
+        }
+      }
+    }
 
-    const branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
+    const archiveUrl = getArchiveUrl(url, branch);
 
     parentDir = `${CACHE_DIR}/${branchLastCommitId}`;
 
@@ -126,9 +140,9 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
       let tempParentDir = `${CACHE_DIR}/temp-${v4()}`;
 
       const downloadRes = await download(
-          archiveUrl,
-          tempParentDir,
-          accessToken,
+        archiveUrl,
+        tempParentDir,
+        accessToken,
       );
 
       await unzipProcess(downloadRes);
@@ -141,7 +155,6 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
       delete loadPromiseMap[promiseKey];
       return { parentDir, path: parentDir + '/' + getDirNameForArchiveUrl(archiveUrl) };
     } else {
-
       delete loadPromiseMap[promiseKey];
       return { parentDir, path: parentDir + '/' + getDirNameForArchiveUrl(archiveUrl) };
     }
