@@ -2,3 +2,4 @@
 .load-git-cache
 .load-proto-cache
 .idea
+src/test.ts
