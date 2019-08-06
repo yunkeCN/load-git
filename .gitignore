@@ -2,3 +2,4 @@
 yarn-error.log
 build
 .idea
+src/test.ts

@@ -14,21 +14,18 @@
   "devDependencies": {
     "@types/fs-extra": "^5.0.4",
     "@types/mkdirp": "^0.5.2",
-    "@types/request": "^2.47.1",
     "@types/request-promise-native": "^1.0.15",
-    "@types/unzip": "^0.1.1",
     "@types/uuid": "^3.4.4",
     "gts": "^0.8.0",
     "ts-node": "^8.3.0",
     "typescript": "^3.1.1"
   },
   "dependencies": {
+    "download-git-repo": "^2.0.0",
     "fs-extra": "^8.1.0",
     "mkdirp": "^0.5.1",
-    "request": "^2.88.0",
     "request-promise-native": "^1.0.5",
     "rmrf": "^2.0.0",
-    "unzip": "^0.1.11",
     "url": "^0.11.0",
     "uuid": "^3.3.2"
   }

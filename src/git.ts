@@ -3,7 +3,7 @@ import * as request from "request-promise-native";
 const gitHttpReg = /https?:\/\/([^/]+)\/(.+)\.git/;
 const gitSshReg = /git@([^:]+):(.+)\.git/;
 
-function getUrlConfig(gitUrl: string): { host: string, repId: string } {
+export function getUrlConfig(gitUrl: string): { host: string, repId: string } {
   let host = '';
   let repId = '';
 
@@ -26,12 +26,6 @@ function getUrlConfig(gitUrl: string): { host: string, repId: string } {
     return { host, repId };
   }
   throw new Error(`Git url not supported yet: ${gitUrl}`);
-}
-
-export function getArchiveUrl(gitUrl: string, branch: string = 'master'): string {
-  const config = getUrlConfig(gitUrl);
-  const { host, repId } = config;
-  return `https://${host}/${repId}/repository/${branch}/archive.zip`;
 }
 
 export async function getBranchLastCommitId(gitUrl: string, branch: string, accessToken?: string): Promise<string> {
