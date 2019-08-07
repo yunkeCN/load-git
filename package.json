@@ -24,6 +24,7 @@
     "download-git-repo": "^2.0.0",
     "fs-extra": "^8.1.0",
     "mkdirp": "^0.5.1",
+    "request": "^2.88.0",
     "request-promise-native": "^1.0.5",
     "rmrf": "^2.0.0",
     "url": "^0.11.0",
