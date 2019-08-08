@@ -66,7 +66,7 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
     if (!fs.existsSync(parentDir)) {
       await new Promise((resolve, reject) => {
         download(
-          `direct:https://${host}/api/v4/projects/${encodeURIComponent(repId)}/repository/archive#${branch}`,
+          `direct:https://${host}/api/v4/projects/${encodeURIComponent(repId)}/repository/archive?sha=${branch}`,
           targetPath,
           { headers: { 'PRIVATE-TOKEN': accessToken } },
           (err: Error | undefined) => {
