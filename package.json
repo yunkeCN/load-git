@@ -16,16 +16,16 @@
     "@types/mkdirp": "^0.5.2",
     "@types/request-promise-native": "^1.0.15",
     "@types/uuid": "^3.4.4",
-    "gts": "^0.8.0",
+    "gts": "^2.0.2",
     "ts-node": "^8.3.0",
     "typescript": "^3.1.1"
   },
   "dependencies": {
-    "download-git-repo": "^2.0.0",
+    "download-git-repo": "^3.0.2",
     "fs-extra": "^8.1.0",
     "mkdirp": "^0.5.1",
     "request": "^2.88.0",
-    "request-promise-native": "^1.0.5",
+    "request-promise-native": "^1.0.9",
     "rmrf": "^2.0.0",
     "url": "^0.11.0",
     "uuid": "^3.3.2"
