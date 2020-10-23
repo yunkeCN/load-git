@@ -19,7 +19,7 @@ function getDirNameForArchiveUrl(archiveUrl: string): string {
 
 export interface GitConfig {
   url: string;
-  branch: string;
+  branch?: string;
   accessToken?: string;
 }
 
@@ -30,7 +30,7 @@ export interface LoadRes {
 
 export async function load(opt: GitConfig): Promise<LoadRes> {
   const { url, accessToken } = opt;
-  let { branch } = opt;
+  let { branch = "master" } = opt;
 
   const promiseKey = `${url}-${branch}`;
 
