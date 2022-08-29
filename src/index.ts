@@ -49,6 +49,7 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
         const branchNotExist = await isBranchExist(url, branch, accessToken);
         if (!branchNotExist) {
           // 分支不存在，则从主干分支获取
+          console.info(`【code-gen】: ${url} {${branch}} 分支不存在,使用{master} 分支进行构建`);
           branch = 'master';
           branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
         } else {
