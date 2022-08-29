@@ -44,12 +44,12 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
     let branchLastCommitId;
     try {
       branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
-    } catch (e) {
+    } catch (e: any) {
       if (e.statusCode === 404 && branch !== 'master') {
         const branchNotExist = await isBranchExist(url, branch, accessToken);
         if (!branchNotExist) {
           // 分支不存在，则从主干分支获取
-          branch = 'master';
+          branch = process.env.branch || 'master';
           branchLastCommitId = await getBranchLastCommitId(url, branch, accessToken);
         } else {
           throw e;
@@ -73,7 +73,7 @@ export async function load(opt: GitConfig): Promise<LoadRes> {
             if (err) {
               reject(err);
             } else {
-              resolve();
+              resolve(null);
             }
           },
         );
